@@ -140,7 +140,7 @@ setTimeout(()=>console.log('v39.59 tense translation QA',v3959TenseTranslationQA
 const V3962_PATCH = String.raw`
 
 /* === v39.62 Cloud AI Conversation Engine === */
-const V3962_VERSION='v39.62';
+const V3962_VERSION='v39.65';
 const V3962_WORKER_URL=String((window.ENGLISH_FUN_CLOUD_URL||'')).trim();
 const V3962_MAX_HISTORY=12;
 const v3962History={text:[],phone:[]};
@@ -158,7 +158,7 @@ function v3962CleanReply(x){
 async function v3962CloudTurn(channel,userText){
   if(!v3962CloudReady()) throw new Error('CLOUD_NOT_CONFIGURED');
   const hist=v3962History[channel]||[];
-  const payload={channel,history:hist.slice(-V3962_MAX_HISTORY),message:String(userText||'').trim(),grade:(typeof currentLevel!=='undefined'?currentLevel:'')};
+  const level=(typeof v38LevelKey==='function')?v38LevelKey():((typeof state==='object'&&state&&state.studentLevelGroup)?state.studentLevelGroup:'post'); const payload={channel,history:hist.slice(-V3962_MAX_HISTORY),message:String(userText||'').trim(),grade:level};
   const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(),15000);
   try{
     const res=await fetch(V3962_WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:ctl.signal,cache:'no-store'});
@@ -186,9 +186,9 @@ window.sendConvReply=async function(){
   try{
     const out=await v3962CloudTurn('text',raw);
     if(wait?.parentNode)wait.parentNode.removeChild(wait);
-    if(out.correction&&$('convFb'))$('convFb').innerHTML='<div class="chatOk">תיקון קצר: <span class="english goodLine">'+escapeHTML(out.correction)+'</span></div>';
-    else if($('convFb'))$('convFb').innerHTML='<div class="chatOk">✓</div>';
-    appendChat('bot',out.reply); convTurns++; currentConv={id:'v3962_'+convTurns,kind:'cloudTeacher',prompt:out.reply}; addPoints(10,'conversation'); speakText(out.reply);
+    const teacherText=out.correction?('Quick correction: '+out.correction+' '+out.reply):out.reply;
+    if($('convFb'))$('convFb').textContent='';
+    appendChat('bot',teacherText); convTurns++; currentConv={id:'v3962_'+convTurns,kind:'cloudTeacher',prompt:teacherText}; addPoints(10,'conversation'); speakText(teacherText);
     v3962SetStatus('English Coach AI בענן מוכן.','ready');
   }catch(e){
     if(wait?.parentNode)wait.parentNode.removeChild(wait);
@@ -219,7 +219,7 @@ window.v3946ProcessPhone=async function(transcript,confidence){
 function v3962SimplifyUI(){
   const p=document.querySelector('#conversation .convAiPanel'); if(p){
     const controls=p.querySelector('.convAiControls'); if(controls) controls.innerHTML='<button class="secondary" onclick="newConv(true)">🔄 שיחה חדשה</button><button onclick="v3915SpeakLastBot()">🔊 שמע תשובה</button>';
-    const note=p.querySelector('.convAiNote'); if(note) note.textContent='English Coach AI הוא המורה היחיד בשיחה. הוא מתקן בקצרה כשצריך, עונה קודם למה שכתבת, שומר הקשר וממשיך בשיחה טבעית.';
+    const note=p.querySelector('.convAiNote'); if(note) note.textContent='English Coach AI הוא המורה היחיד בשיחה. תיקון באנגלית מופיע בתוך השיחה ונקרא בקול; המורה גם שומר הקשר ופועל לפי רמת התלמיד.';
   }
   const rich=document.querySelector('#phoneCall .phoneRichAi'); if(rich) rich.innerHTML='<div class="mini">English Coach AI בענן פועל אוטומטית. אין צורך לבחור או לטעון מנוע AI.</div>';
   const ctitle=document.querySelector('#conversation .card:nth-of-type(2) h3'); if(ctitle) ctitle.textContent='שיחת מסרונים עם English Coach AI';
@@ -228,6 +228,20 @@ setTimeout(v3962SimplifyUI,250);
 window.v3962CloudQA=function(){
   return {version:V3962_VERSION,cloudConfigured:v3962CloudReady(),historyLimit:V3962_MAX_HISTORY,textUsesCloud:String(sendConvReply).includes("v3962CloudTurn('text'"),phoneUsesCloud:String(v3946ProcessPhone).includes("v3962CloudTurn('phone'"),noWikiInNewPath:!String(sendConvReply).includes('Wiki')&&!String(v3946ProcessPhone).includes('Wiki')};
 };
+
+window.v3965ConversationQA=function(){
+  const ct=String(sendConvReply), pt=String(v3946ProcessPhone), turn=String(v3962CloudTurn);
+  return {
+    version:'v39.65',
+    sendsStudentLevel:turn.includes("v38LevelKey")&&turn.includes("grade:level"),
+    textCorrectionInsideChat:ct.includes("Quick correction:")&&ct.includes("appendChat('bot',teacherText)"),
+    textReadsCorrection:ct.includes("speakText(teacherText)"),
+    phoneReadsCorrection:pt.includes("v3962ComposeSpoken(out)")&&String(v3962ComposeSpoken).includes("Quick correction:"),
+    sameCloudEngine:ct.includes("v3962CloudTurn('text'")&&pt.includes("v3962CloudTurn('phone'")
+  };
+};
+setTimeout(()=>{try{console.log('v39.65 conversation QA',window.v3965ConversationQA());}catch(e){}},1900);
+
 /* === end v39.62 === */
 
 
@@ -317,14 +331,4 @@ setTimeout(()=>{try{console.log('v39.63 daily goals QA',window.v3963DailyGoalsQA
     const response=await fetch('english_fun_v39_58_github_light-2.html',{cache:'no-store'});
     if(!response.ok) throw new Error('HTTP '+response.status);
     let html=await response.text();
-    const V3960_SEO_HEAD=new TextDecoder().decode(Uint8Array.from(atob('CjwhLS0gPT09IEVuZ2xpc2ggRnVuIFNFTyB2MzkuNjAgPT09IC0tPgo8dGl0bGU+RW5nbGlzaCBGdW4g4oCTINec15nXnteV15Mg15DXoNeS15zXmdeqINec15nXnNeT15nXnTwvdGl0bGU+CjxtZXRhIG5hbWU9ImRlc2NyaXB0aW9uIiBjb250ZW50PSJFbmdsaXNoIEZ1biDXlNeZ15Ag15DXpNec15nXp9em15nXlCDXl9eZ16DXnteZ16og15zXnNeZ157XldeTINeQ16DXktec15nXqiDXnNeZ15zXk9eZ1506INeQ15XXpteoINee15nXnNeZ150sINeT16fXk9eV16csINeW157XoNeZ150sINen16jXmdeQ15QsINep15nXl9eULCDXntep15fXp9eZINeW15nXm9eo15XXnywg15DXmdeV16og15XXqteo15LXldecINeQ15nXoNeY16jXkNen15jXmdeR15kg15zXpNeZINeo157XqiDXnNeZ157XldeTLiI+CjxtZXRhIG5hbWU9InJvYm90cyIgY29udGVudD0iaW5kZXgsZm9sbG93LG1heC1zbmlwcGV0Oi0xLG1heC1pbWFnZS1wcmV2aWV3OmxhcmdlLG1heC12aWRlby1wcmV2aWV3Oi0xIj4KPGxpbmsgcmVsPSJjYW5vbmljYWwiIGhyZWY9Imh0dHBzOi8vemNtYXRzY2ktZ2l0LmdpdGh1Yi5pby9lbmdsaXNoLWZ1bi8iPgo8bWV0YSBwcm9wZXJ0eT0ib2c6dHlwZSIgY29udGVudD0id2Vic2l0ZSI+CjxtZXRhIHByb3BlcnR5PSJvZzpzaXRlX25hbWUiIGNvbnRlbnQ9IkVuZ2xpc2ggRnVuIj4KPG1ldGEgcHJvcGVydHk9Im9nOnRpdGxlIiBjb250ZW50PSJFbmdsaXNoIEZ1biDigJMg15zXmdee15XXkyDXkNeg15LXnNeZ16og15zXmdec15PXmdedIj4KPG1ldGEgcHJvcGVydHk9Im9nOmRlc2NyaXB0aW9uIiBjb250ZW50PSLXkNek15zXmden16bXmdeUINeX15nXoNee15nXqiDXldeQ15nXoNeY16jXkNen15jXmdeR15nXqiDXnNec15nXnteV15Mg15DXoNeS15zXmdeqINec15nXnNeT15nXnSwg16LXnSDXkNeV16bXqCDXnteZ15zXmdedLCDXk9en15PXldenLCDXltee16DXmdedLCDXp9eo15nXkNeULCDXqdeZ15fXlCDXldee16nXl9en15kg15zXnteZ15PXlC4iPgo8bWV0YSBwcm9wZXJ0eT0ib2c6dXJsIiBjb250ZW50PSJodHRwczovL3pjbWF0c2NpLWdpdC5naXRodWIuaW8vZW5nbGlzaC1mdW4vIj4KPG1ldGEgcHJvcGVydHk9Im9nOmxvY2FsZSIgY29udGVudD0iaGVfSUwiPgo8bWV0YSBuYW1lPSJ0d2l0dGVyOmNhcmQiIGNvbnRlbnQ9InN1bW1hcnkiPgo8bWV0YSBuYW1lPSJ0d2l0dGVyOnRpdGxlIiBjb250ZW50PSJFbmdsaXNoIEZ1biDigJMg15zXmdee15XXkyDXkNeg15LXnNeZ16og15zXmdec15PXmdedIj4KPG1ldGEgbmFtZT0idHdpdHRlcjpkZXNjcmlwdGlvbiIgY29udGVudD0i15DXpNec15nXp9em15nXlCDXl9eZ16DXnteZ16og15XXkNeZ16DXmNeo15DXp9eY15nXkdeZ16og15zXnNeZ157XldeTINeQ16DXktec15nXqiDXnNeZ15zXk9eZ150uIj4KPG1ldGEgbmFtZT0idGhlbWUtY29sb3IiIGNvbnRlbnQ9IiNmN2ZiZmYiPgo8c2NyaXB0IHR5cGU9ImFwcGxpY2F0aW9uL2xkK2pzb24iPnsKICAiQGNvbnRleHQiOiJodHRwczovL3NjaGVtYS5vcmciLAogICJAdHlwZSI6IldlYkFwcGxpY2F0aW9uIiwKICAibmFtZSI6IkVuZ2xpc2ggRnVuIiwKICAidXJsIjoiaHR0cHM6Ly96Y21hdHNjaS1naXQuZ2l0aHViLmlvL2VuZ2xpc2gtZnVuLyIsCiAgImRlc2NyaXB0aW9uIjoi15DXpNec15nXp9em15nXlCDXl9eZ16DXnteZ16og15zXnNeZ157XldeTINeQ16DXktec15nXqiDXnNeZ15zXk9eZ150g15HXkNee16bXoteV16og16rXqNeS15XXnCDXkNeZ16DXmNeo15DXp9eY15nXkdeZLCDXntep15fXp9eZINep16TXlCwg15DXldem16gg157Xmdec15nXnSwg15PXp9eT15XXpywg16fXqNeZ15DXlCDXldep15nXl9eULiIsCiAgImFwcGxpY2F0aW9uQ2F0ZWdvcnkiOiJFZHVjYXRpb25hbEFwcGxpY2F0aW9uIiwKICAib3BlcmF0aW5nU3lzdGVtIjoiV2ViIiwKICAiaW5MYW5ndWFnZSI6WyJoZSIsImVuIl0sCiAgImlzQWNjZXNzaWJsZUZvckZyZWUiOnRydWUsCiAgImF1ZGllbmNlIjp7IkB0eXBlIjoiRWR1Y2F0aW9uYWxBdWRpZW5jZSIsImVkdWNhdGlvbmFsUm9sZSI6InN0dWRlbnQifSwKICAib2ZmZXJzIjp7IkB0eXBlIjoiT2ZmZXIiLCJwcmljZSI6IjAiLCJwcmljZUN1cnJlbmN5IjoiSUxTIn0KfTwvc2NyaXB0Pgo8IS0tID09PSBlbmQgU0VPIHYzOS42MCA9PT0gLS0+Cg=='),c=>c.charCodeAt(0)));
-    html=html.replace(/<title>[\s\S]*?<\/title>/i,'').replace(/<\/head>/i,V3960_SEO_HEAD+'\n</head>');
-    const pos=html.toLowerCase().lastIndexOf('</scr'+'ipt>');
-    if(pos<0) throw new Error('Base app script was not found');
-    html=html.slice(0,pos)+'\n'+V3959_PATCH+'\n'+V3962_PATCH+'\n'+html.slice(pos);
-    document.open(); document.write(html); document.close();
-  }catch(e){ document.getElementById('boot').innerHTML='<b>לא הצלחתי לטעון את האפליקציה.</b><br><small>'+String(e).replace(/[<>]/g,'')+'</small>'; }
-})();
-</script>
-</body>
-</html>
+    const V3960_SEO_HEAD=new TextDecoder().decode(Uint8Array.from(atob('CjwhLS0gPT09IEVuZ2xpc2ggRnVuIFNFTyB2MzkuNjAgPT09IC0tPgo8dGl0bGU+RW5nbGlzaCBGdW4g4oCTINec15nXnteV15Mg15DXoNeS15zXmdeqINec15nXnNeT15nXnTwvdGl0bGU+CjxtZXRhIG5hbWU9ImRlc2NyaXB0aW9uIiBjb250ZW50PSJFbmdsaXNoIEZ1biDXlNeZ15Ag15DXpNec15nXp9em15nXlCDXl9eZ16DXnteZ16og15zXnNeZ157XldeTINeQ16DXktec15nXqiDXnNeZ15zXk9eZ1506INeQ15XXpteoINee15nXnNeZ150sINeT1
