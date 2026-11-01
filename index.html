@@ -133,14 +133,14 @@ function v3959TenseTranslationQA(){
   const nf=String(v3934NewTenseQuestion), rf=String(v3934RenderTenseFeature);
   report.orderChecks={asyncTranslation:nf.includes('await v3959TranslateEnglishToHebrew(item.en)'),lockBeforeTranslation:nf.indexOf('v3934RenderTenseFeature(id)')<nf.indexOf('await v3959TranslateEnglishToHebrew(item.en)'),readyAfterTranslation:nf.indexOf('item._v3959TranslationReady=true')>nf.indexOf('await v3959TranslateEnglishToHebrew(item.en)'),hidesSolutionWhilePending:rf.includes('v3959SetTenseLocked(id,true'),usesTranslatedHebrew:rf.includes('item._v3959Hebrew')};
   report.ok=Object.values(report.features).every(x=>x.count>=1000&&x.allHaveEnglish)&&Object.values(report.orderChecks).every(Boolean); return report;
-  }
+}
 setTimeout(()=>console.log('v39.59 tense translation QA',v3959TenseTranslationQA()),1600);
 /* === end v39.59 === */
 `;
 const V3962_PATCH = String.raw`
 
 /* === v39.62 Cloud AI Conversation Engine === */
-const V3962_VERSION='v39.65';
+const V3962_VERSION='v39.66';
 const V3962_WORKER_URL=String((window.ENGLISH_FUN_CLOUD_URL||'')).trim();
 const V3962_MAX_HISTORY=12;
 const v3962History={text:[],phone:[]};
@@ -155,19 +155,51 @@ function v3962CleanReply(x){
   const reply=String(x&&x.reply||'').trim();
   return {correction,reply:reply||"I’m sorry—I couldn’t answer that clearly. Please try again."};
 }
+function v3966Sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function v3966CloudError(code,message,status){
+  const e=new Error(message||code||'CLOUD_ERROR'); e.code=code||'UNKNOWN'; e.status=status||0; return e;
+}
+function v3966FriendlyError(e){
+  const code=String(e&&e.code||e&&e.message||'UNKNOWN');
+  if(code==='CLOUD_NOT_CONFIGURED') return 'החיבור למורה בענן עדיין לא הוגדר.';
+  if(code==='DAILY_QUOTA_EXCEEDED') return 'מכסת השימוש היומית של שירות ה-AI נוצלה. ניתן לנסות שוב לאחר איפוס המכסה היומית.';
+  if(code==='RATE_LIMIT_TEMPORARY') return 'יש כרגע יותר מדי בקשות לשירות ה-AI. המערכת ניסתה שוב אוטומטית; נסה שוב בעוד דקה.';
+  if(code==='SERVICE_BUSY'||code==='SERVICE_TEMPORARY') return 'שירות ה-AI עמוס או לא זמין זמנית. המערכת כבר ביצעה מספר ניסיונות אוטומטיים; נסה שוב בעוד כמה דקות.';
+  if(code==='UPSTREAM_NETWORK'||code==='CLIENT_NETWORK'||code==='CLIENT_TIMEOUT') return 'אין כרגע חיבור יציב לאינטרנט או לשירות הענן. בדוק את החיבור ונסה שוב.';
+  if(code==='API_KEY_ERROR') return 'יש בעיית הגדרה בחיבור למורה בענן. מנהל האפליקציה צריך לבדוק את מפתח ה-API.';
+  if(code==='BAD_REQUEST') return 'אירעה תקלה בבקשה לשירות ה-AI. נסה לנסח מחדש את ההודעה.';
+  return 'אירעה תקלה זמנית בחיבור למורה בענן. נסה שוב בעוד רגע.';
+}
 async function v3962CloudTurn(channel,userText){
-  if(!v3962CloudReady()) throw new Error('CLOUD_NOT_CONFIGURED');
+  if(!v3962CloudReady()) throw v3966CloudError('CLOUD_NOT_CONFIGURED');
   const hist=v3962History[channel]||[];
-  const level=(typeof v38LevelKey==='function')?v38LevelKey():((typeof state==='object'&&state&&state.studentLevelGroup)?state.studentLevelGroup:'post'); const payload={channel,history:hist.slice(-V3962_MAX_HISTORY),message:String(userText||'').trim(),grade:level};
-  const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(),15000);
-  try{
-    const res=await fetch(V3962_WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:ctl.signal,cache:'no-store'});
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(data&&data.error||('HTTP_'+res.status));
-    const out=v3962CleanReply(data);
-    hist.push({role:'user',text:payload.message},{role:'assistant',text:[out.correction,out.reply].filter(Boolean).join(' ')});v3962Trim(hist);
-    return out;
-  }finally{clearTimeout(timer);}
+  const level=(typeof v38LevelKey==='function')?v38LevelKey():((typeof state==='object'&&state&&state.studentLevelGroup)?state.studentLevelGroup:'post');
+  const payload={channel,history:hist.slice(-V3962_MAX_HISTORY),message:String(userText||'').trim(),grade:level};
+
+  let lastErr=null;
+  // Client-to-Worker retry protects against a brief local network failure.
+  for(let attempt=0;attempt<2;attempt++){
+    const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(),50000);
+    try{
+      const res=await fetch(V3962_WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:ctl.signal,cache:'no-store'});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok){
+        const code=String(data&&data.code||data&&data.error||('HTTP_'+res.status));
+        throw v3966CloudError(code,data&&data.message||code,res.status);
+      }
+      const out=v3962CleanReply(data);
+      hist.push({role:'user',text:payload.message},{role:'assistant',text:[out.correction,out.reply].filter(Boolean).join(' ')});v3962Trim(hist);
+      return out;
+    }catch(e){
+      if(e&&e.name==='AbortError') lastErr=v3966CloudError('CLIENT_TIMEOUT');
+      else if(e&&e.code) lastErr=e;
+      else lastErr=v3966CloudError('CLIENT_NETWORK',String(e&&e.message||e));
+      const retryable=['CLIENT_NETWORK','CLIENT_TIMEOUT','SERVICE_BUSY','SERVICE_TEMPORARY','RATE_LIMIT_TEMPORARY','UPSTREAM_NETWORK'].includes(String(lastErr.code||''));
+      if(!retryable || attempt===1) throw lastErr;
+      await v3966Sleep(1200);
+    }finally{clearTimeout(timer);}
+  }
+  throw lastErr||v3966CloudError('UNKNOWN');
 }
 function v3962ComposeSpoken(out){return [out.correction?('Quick correction: '+out.correction):'',out.reply].filter(Boolean).join(' ');}
 
@@ -182,7 +214,7 @@ window.newConv=function(force=false){
 window.sendConvReply=async function(){
   const input=$('convInput'),raw=(input?.value||'').trim(); if(!raw){if($('convFb'))$('convFb').innerHTML='<span class="no">כתוב הודעה באנגלית ואז לחץ שלח.</span>';return;}
   appendChat('user',raw); input.value='';
-  const wait=typeof v3915AddWaiting==='function'?v3915AddWaiting():null; v3962SetStatus('English Coach AI חושב על מה שכתבת…','loading');
+  const wait=typeof v3915AddWaiting==='function'?v3915AddWaiting():null; v3962SetStatus('English Coach AI חושב… אם יש עומס, המערכת מנסה שוב אוטומטית.','loading');
   try{
     const out=await v3962CloudTurn('text',raw);
     if(wait?.parentNode)wait.parentNode.removeChild(wait);
@@ -192,7 +224,7 @@ window.sendConvReply=async function(){
     v3962SetStatus('English Coach AI בענן מוכן.','ready');
   }catch(e){
     if(wait?.parentNode)wait.parentNode.removeChild(wait);
-    const msg=e.message==='CLOUD_NOT_CONFIGURED'?'החיבור למורה בענן עדיין לא הוגדר. אחרי הגדרת Cloudflare השיחה תפעל כאן אוטומטית.':'לא הצלחתי להגיע למורה בענן כרגע. נסה שוב בעוד רגע.';
+    const msg=v3966FriendlyError(e);
     appendChat('bot',msg); v3962SetStatus(msg,'error');
   }
 };
@@ -211,8 +243,9 @@ window.v3946ProcessPhone=async function(transcript,confidence){
     const spoken=v3962ComposeSpoken(out); v3946Phone.lastBot=spoken; if($('phoneHiddenBot'))$('phoneHiddenBot').textContent=spoken; v3946SpeakPhone(spoken); addPoints(10,'conversation');
     v3946PhoneStatus(out.correction?'יש תיקון קצר ואז תשובה עניינית. הקש הקלטה כשתרצה לענות.':'הבנתי. הקש הקלטה כשתרצה לענות.','ready');
   }catch(e){
-    const msg=e.message==='CLOUD_NOT_CONFIGURED'?'צריך להשלים את חיבור Cloudflare כדי להפעיל את המורה בענן.':'לא הצלחתי להגיע למורה בענן כרגע. נסה שוב בעוד רגע.';
-    v3946PhoneStatus(msg,'error');
+    const msg=v3966FriendlyError(e);
+    v3946Phone.lastBot=msg; if($('phoneHiddenBot'))$('phoneHiddenBot').textContent=msg;
+    v3946PhoneStatus(msg,'error'); try{v3946SpeakPhone(msg);}catch(_){}
   }finally{v3946Phone.processing=false;}
 };
 
@@ -259,7 +292,7 @@ function v3963InstallConversationGoals(){
 
     if(typeof GAME_LABELS==='object'){
       GAME_LABELS.conversation='שיחת מסרונים';
-            GAME_LABELS.phoneCall='שיחת טלפון';
+      GAME_LABELS.phoneCall='שיחת טלפון';
     }
 
     if(typeof v385LoadTargets==='function' && typeof v385SaveTargets==='function'){
